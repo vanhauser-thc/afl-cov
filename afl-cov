@@ -285,7 +285,15 @@ def process_afl_test_cases(cargs: argparse.Namespace) -> bool:
                         cov_paths["log_file"],
                         cargs,
                     )
-                    time.sleep(cargs.sleep)
+                    try:
+                        time.sleep(cargs.sleep)
+                    except KeyboardInterrupt:
+                        log(
+                            b"[+] Stopping live collection due to user interrupt",
+                            cov_paths["log_file"],
+                            cargs,
+                        )
+                        break
                     continue
             else:
                 logr(
