@@ -36,6 +36,7 @@ import signal
 import sys
 import time
 from shutil import rmtree
+from shutil import copyfile
 from sys import argv
 from tempfile import NamedTemporaryFile
 from typing import Any, Dict, Iterator, List, Union, Optional, Tuple
@@ -120,7 +121,7 @@ def process_afl_test_cases(cargs: argparse.Namespace) -> bool:
     tot_files = 0
     curr_cycle = -1
 
-    afl_files = []  # type: List[str]
+    afl_files = set()  # type: Set[str]
     cov_paths = {}  # type: CovPathsDictType
 
     # main coverage tracking dictionary
@@ -158,7 +159,7 @@ def process_afl_test_cases(cargs: argparse.Namespace) -> bool:
 
             for f in tmp_files:
                 if f not in afl_files:
-                    afl_files.append(f)
+                    afl_files.add(f)
                     new_files.append(f)
 
             if new_files:
@@ -175,6 +176,14 @@ def process_afl_test_cases(cargs: argparse.Namespace) -> bool:
                 if f_ctr == len(new_files):
                     last_file = True
 
+
+                if cargs.afl_file:
+                    try:
+                        copyfile(f, cargs.afl_file)
+                    except Exception:
+                        print("[-] Cannot copy file")
+                        sys.exit(1)
+ 
                 if cargs.cover_corpus and last_dir and last_file:
                     # in --cover-corpus mode, only run lcov after all AFL
                     # test cases have been processed
@@ -186,7 +195,7 @@ def process_afl_test_cases(cargs: argparse.Namespace) -> bool:
                 logr(
                     b"[+] AFL test case: %s (%d / %d), cycle: %d"
                     % (
-                        os.path.basename(f).encode(),
+                        os.path.basename(f).encode(errors="namereplace"),
                         num_files,
                         len(afl_files),
                         curr_cycle,
@@ -289,7 +298,7 @@ def process_afl_test_cases(cargs: argparse.Namespace) -> bool:
                         time.sleep(cargs.sleep)
                     except KeyboardInterrupt:
                         log(
-                            b"[+] Stopping live collection due to user interrupt",
+                            b"[!] Stopping live collection due to user interrupt",
                             cov_paths["log_file"],
                             cargs,
                         )
@@ -811,10 +820,11 @@ def is_afl_fuzz_running(cargs):
         pid = get_running_pid(stats_file, rb"fuzzer_pid\s+\:\s+(\d+)")
     else:
         for p in os.listdir(cargs.afl_fuzzing_dir):
-            stats_file = "%s/%s/fuzzer_stats" % (
-                cargs.afl_fuzzing_dir.encode(),
-                p.encode(),
-            )
+            #stats_file = "%s/%s/fuzzer_stats" % (
+            #    cargs.afl_fuzzing_dir.encode(),
+            #    p.encode(),
+            #)
+            stats_file = "%s/%s/fuzzer_stats" % ( cargs.afl_fuzzing_dir, p)
             if os.path.exists(stats_file):
                 # allow a single running AFL instance in parallel mode
                 # to mean that AFL is running (and may be generating
@@ -864,17 +874,17 @@ def run_cmd(
     else:
         fh = open(os.devnull, "wb")
 
+    if timeout:
+        cmd = "timeout -s KILL %s %s" % (timeout, cmd)
+
     if aflrun is True and len(fn) > 0:
         cmd = "cat " + fn + " | " + cmd
 
     if cargs.verbose:
         if log_file:
-            logr(b"    CMD: %s" % cmd.encode(), log_file, cargs)
+            logr(b"    CMD: %s" % cmd.encode(errors="namereplace"), log_file, cargs)
         else:
             print("    CMD: %s" % cmd)
-
-    if timeout:
-        cmd = "timeout -s KILL %s %s" % (timeout, cmd)
 
     exit_code = subprocess.call(
         cmd, stdin=None, stdout=fh, stderr=subprocess.STDOUT, shell=True
@@ -1178,9 +1188,9 @@ def validate_cargs(cargs: argparse.Namespace) -> bool:
             print("[*] Must set --src-file in --line-search mode")
             return False
 
-    if cargs.live and not cargs.ignore_core_pattern:
-        if not check_core_pattern():
-            return False
+    #if cargs.live and not cargs.ignore_core_pattern:
+    #    if not check_core_pattern():
+    #        return False
 
     if not cargs.live and not is_dir(cargs.afl_fuzzing_dir):
         print(
@@ -1317,20 +1327,20 @@ def stop_afl(cargs: argparse.Namespace) -> bool:
     return rv
 
 
-def check_core_pattern() -> bool:
-    rv = True
-
-    core_pattern_file = "/proc/sys/kernel/core_pattern"
-
-    # check /proc/sys/kernel/core_pattern to see if afl-fuzz will
-    # accept it
-    if os.path.exists(core_pattern_file):
-        with open(core_pattern_file, "rb") as f:
-            if f.readline().rstrip()[0] == b"|":
-                # same logic as implemented by afl-fuzz itself
-                print("[*] afl-fuzz requires 'echo core >%s'" % core_pattern_file)
-                rv = False
-    return rv
+#def check_core_pattern() -> bool:
+#    rv = True
+#
+#    core_pattern_file = "/proc/sys/kernel/core_pattern"
+#
+#    # check /proc/sys/kernel/core_pattern to see if afl-fuzz will
+#    # accept it
+#    if os.path.exists(core_pattern_file):
+#        with open(core_pattern_file, "rb") as f:
+#            if f.readline().rstrip()[0] == b"|":
+#                # same logic as implemented by afl-fuzz itself
+#                print("[*] afl-fuzz requires 'echo core >%s'" % core_pattern_file)
+#                rv = False
+#    return rv
 
 
 def parse_cmdline() -> argparse.Namespace:
@@ -1534,6 +1544,9 @@ def parse_cmdline() -> argparse.Namespace:
     )
     p.add_argument(
         "-T", "--timeout", type=str, help="timeout (default 5 seconds)", default="5"
+    )
+    p.add_argument(
+        "--afl-file", type=str, help="Filepath that is passed to AFL with -f argument", default=""
     )
 
     return p.parse_args()
