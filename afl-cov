@@ -285,6 +285,8 @@ def process_afl_test_cases(cargs: argparse.Namespace) -> bool:
                 if do_break:
                     break
 
+            new_files = []
+
         if cargs.live:
             if is_afl_fuzz_running(cargs):
                 if not len(new_files):
