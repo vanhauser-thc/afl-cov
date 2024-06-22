@@ -197,7 +197,7 @@ def process_afl_test_cases(cargs: argparse.Namespace) -> bool:
                     % (
                         os.path.basename(f).encode(errors="namereplace"),
                         num_files,
-                        len(afl_files),
+                        len(new_files),
                         curr_cycle,
                     ),
                     cov_paths["log_file"],
@@ -284,6 +284,8 @@ def process_afl_test_cases(cargs: argparse.Namespace) -> bool:
 
                 if do_break:
                     break
+
+            new_files = []
 
         if cargs.live:
             if is_afl_fuzz_running(cargs):
