@@ -867,7 +867,7 @@ def run_cmd(
     collect: int,
     aflrun: bool,
     fn: str,
-    timeout: Optional[int] = None,
+    timeout: Optional[str] = None,
 ) -> Tuple[int, List[bytes]]:
     out = []
 
@@ -888,9 +888,25 @@ def run_cmd(
         else:
             print("    CMD: %s" % cmd)
 
-    exit_code = subprocess.call(
-        cmd, stdin=None, stdout=fh, stderr=subprocess.STDOUT, shell=True
-    )
+    if timeout:
+        cmd = "timeout -s KILL %s %s" % (timeout, cmd)
+
+    # If timeout is in seconds, add an extra layer of timeout
+    # the timeout linux command failed me on several occasions
+    sp_timeout = int(timeout) * 2 if timeout and timeout.isdigit() else None
+
+    try:
+        exit_code = subprocess.call(
+            cmd, stdin=None, stdout=fh, stderr=subprocess.STDOUT, shell=True,
+            timeout=sp_timeout
+        )
+    except subprocess.TimeoutExpired:
+        if cargs.verbose:
+            if log_file:
+                logr(b"    CMD: %s timedout: %s" % (cmd.encode(), str(ex)), log_file, cargs)
+            else:
+                print("    CMD: %s timedout: %s" % (cmd, str(ex)))
+        exit_code = -1
 
     fh.close()
 
