@@ -1477,7 +1477,7 @@ def parse_cmdline() -> argparse.Namespace:
         "--lcov-exclude-pattern",
         type=str,
         help="Set exclude pattern for lcov results",
-        default="/usr/include/\*",
+        default=r"/usr/include/*",
     )
     p.add_argument(
         "--func-search", type=str, help="Search for coverage of a specific function"
